@@ -1,0 +1,58 @@
+name: Daily Trump mentions report
+
+on:
+  schedule:
+    # 13:00 UTC daily (~8am ET) — adjust as you like.
+    - cron: "0 13 * * *"
+  workflow_dispatch: {}   # allow manual runs from the Actions tab
+
+permissions:
+  contents: write          # to commit the generated report back to the repo
+
+concurrency:
+  group: trumpscraper-daily
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Persist the SQLite DB across runs so dedupe + lookback work over time.
+      - name: Restore database
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: trumpscraper-db-${{ github.run_id }}
+          restore-keys: |
+            trumpscraper-db-
+
+      - name: Run pipeline
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m trumpscraper run
+
+      - name: Commit report
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add reports/*.md || true
+          if ! git diff --cached --quiet; then
+            git commit -m "Daily report $(date -u +%Y-%m-%d)"
+            git push
+          else
+            echo "No report changes to commit."
+          fi

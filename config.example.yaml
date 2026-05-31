@@ -1,0 +1,37 @@
+# TrumpScraper configuration. Copy to config.yaml and edit.
+# Secrets are read from environment variables, NOT this file:
+#   ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+
+anthropic:
+  model: claude-opus-4-8       # most capable; see the claude-api skill for alternatives
+  max_tokens: 8000
+
+sources:
+  truth_social:
+    enabled: true
+    account: realDonaldTrump
+    account_id: "107780257626128497"   # Trump's Truth Social numeric account id
+    base_url: https://truthsocial.com
+    limit: 40                  # how many recent posts to pull per run
+
+  audio:
+    enabled: false             # set true + add URLs to transcribe speeches/streams
+    urls: []                   # e.g. ["https://www.youtube.com/watch?v=..."]
+    whisper_model: base        # tiny | base | small | medium | large-v3
+
+  local:
+    enabled: true
+    inbox_dir: inbox           # drop .txt / .json transcripts here for ingestion
+
+report:
+  title: "Trump Market Mentions — Daily Digest"
+  lookback_hours: 24           # window of mentions to include in each report
+  min_confidence: 0.5          # drop low-confidence mentions
+  reports_dir: reports
+
+telegram:
+  enabled: true
+  parse_mode: HTML
+
+storage:
+  db_path: data/trumpscraper.db

@@ -1,0 +1,24 @@
+# Secrets / local config
+.env
+config.yaml
+
+# Data + generated artifacts
+data/*.db
+data/*.db-journal
+*.sqlite
+
+# Inbox content (drop-in files are local)
+inbox/*
+!inbox/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# OS
+.DS_Store

@@ -1,0 +1,7 @@
+# Optional dependencies for the audio source (transcribing speeches / streams).
+# Also requires `ffmpeg` on PATH.
+#   pip install -r requirements-audio.txt
+yt-dlp>=2024.1.0
+faster-whisper>=1.0.0
+# Alternatively, openai-whisper (heavier; pulls in torch):
+# openai-whisper>=20231117

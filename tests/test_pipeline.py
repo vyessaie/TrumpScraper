@@ -200,6 +200,18 @@ class ReportTests(unittest.TestCase):
         report = build_report([], title="T", window_hours=24, total_items=0)
         self.assertIn("No company mentions", render_markdown(report))
 
+    def test_publicly_traded_filter(self):
+        # Mirrors pipeline.build()'s filter: keep only mentions with a ticker.
+        mentions = self._mentions() + [
+            Mention(company="Sullivan & Cromwell", sentiment="positive",
+                    score=0.7, confidence=0.9, ticker=None),
+        ]
+        kept = [m for m in mentions if m.ticker]
+        companies = {m.company for m in kept}
+        self.assertIn("Apple", companies)
+        self.assertIn("Amazon", companies)
+        self.assertNotIn("Sullivan & Cromwell", companies)
+
 
 class TelegramTests(unittest.TestCase):
     def test_split_short(self):

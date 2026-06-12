@@ -65,6 +65,14 @@ def build(config: Config, store: Store, total_items: int = 0) -> Report:
     min_conf = float(config.report.get("min_confidence", 0.5))
     since = (datetime.now(timezone.utc) - timedelta(hours=window_hours)).isoformat()
     mentions = store.mentions_since(since, min_confidence=min_conf)
+    if config.report.get("publicly_traded_only"):
+        # A ticker is Claude's signal that the company is publicly traded.
+        kept = [m for m in mentions if m.ticker]
+        log.info(
+            "report: publicly_traded_only -> %d of %d mentions kept",
+            len(kept), len(mentions),
+        )
+        mentions = kept
     return build_report(
         mentions,
         title=config.report.get("title", "Trump Market Mentions"),

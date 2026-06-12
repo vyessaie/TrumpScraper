@@ -38,8 +38,10 @@ statement — not the market's view, not your own. Use:
    - "mixed": both positive and negative elements
 4. score: a number from -1.0 (extremely negative) to +1.0 (extremely positive), 0.0 = neutral.
 5. confidence: 0.0-1.0 — how confident you are this is a real company mention with that sentiment.
-6. ticker: the stock ticker symbol if the company is publicly traded and you are confident \
-(e.g. "AAPL"), otherwise null.
+6. ticker: the company's stock ticker symbol ONLY if it is publicly traded on a major \
+exchange and you are confident of the exact symbol (e.g. "AAPL", "C", "MSFT"). For private \
+companies, subsidiaries without their own listing, law firms, or anything you are unsure \
+about, set this to null. Do not guess a ticker.
 7. quote: the short verbatim phrase from the statement that mentions the company.
 8. rationale: one concise sentence explaining the sentiment call.
 

@@ -69,6 +69,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "title": "Trump Market Mentions — Daily Digest",
         "lookback_hours": 24,
         "min_confidence": 0.5,
+        "publicly_traded_only": True,  # only include companies with a stock ticker
         "reports_dir": "reports",
     },
     "telegram": {

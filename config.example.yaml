@@ -42,6 +42,7 @@ report:
   title: "Trump Market Mentions — Daily Digest"
   lookback_hours: 24           # window of mentions to include in each report
   min_confidence: 0.5          # drop low-confidence mentions
+  publicly_traded_only: true   # only companies with a stock ticker; false = all
   reports_dir: reports
 
 telegram:

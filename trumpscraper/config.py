@@ -102,9 +102,9 @@ class Config:
             _deep_merge(merged, user_cfg)
         return cls(
             data=merged,
-            anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY"),
-            telegram_bot_token=os.environ.get("TELEGRAM_BOT_TOKEN"),
-            telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID"),
+            anthropic_api_key=_clean_secret(os.environ.get("ANTHROPIC_API_KEY")),
+            telegram_bot_token=_clean_secret(os.environ.get("TELEGRAM_BOT_TOKEN")),
+            telegram_chat_id=_clean_secret(os.environ.get("TELEGRAM_CHAT_ID")),
         )
 
     # convenience accessors
@@ -130,6 +130,18 @@ class Config:
 
     def with_overrides(self, **kwargs: Any) -> "Config":
         return replace(self, **kwargs)
+
+
+def _clean_secret(value: str | None) -> str | None:
+    """Normalize a pasted secret: trim whitespace/newlines and stray quotes.
+
+    A trailing newline in a CI secret corrupts the HTTP header it's sent in,
+    surfacing as a generic "Connection error" — strip defensively.
+    """
+    if value is None:
+        return None
+    cleaned = value.strip().strip("'\"").strip()
+    return cleaned or None
 
 
 def _deep_copy(d: dict[str, Any]) -> dict[str, Any]:

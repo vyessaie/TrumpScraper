@@ -137,6 +137,16 @@ class RssTests(unittest.TestCase):
         self.assertNotIn("var x=1", text)
 
 
+class ConfigTests(unittest.TestCase):
+    def test_clean_secret(self):
+        from trumpscraper.config import _clean_secret
+        self.assertEqual(_clean_secret("sk-ant-abc\n"), "sk-ant-abc")
+        self.assertEqual(_clean_secret('  "sk-ant-abc"  '), "sk-ant-abc")
+        self.assertEqual(_clean_secret("'token'"), "token")
+        self.assertIsNone(_clean_secret("   "))
+        self.assertIsNone(_clean_secret(None))
+
+
 class AnalyzeTests(unittest.TestCase):
     def test_to_mentions_filters_and_normalizes(self):
         analysis = Analysis(

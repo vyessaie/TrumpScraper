@@ -49,7 +49,7 @@ def analyze(config: Config, store: Store, limit: int | None = None) -> int:
         try:
             result = analyzer.analyze(item.text, context=f"source: {item.source}")
         except Exception as exc:
-            log.error("analyze: item %s failed (%s)", item.id, exc)
+            log.error("analyze: item %s failed (%s: %s)", item.id, type(exc).__name__, exc)
             continue
         mentions = to_mentions(result)
         store.add_mentions(item.id, mentions)

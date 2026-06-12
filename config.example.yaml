@@ -7,8 +7,23 @@ anthropic:
   max_tokens: 8000
 
 sources:
-  truth_social:
+  # Primary sources: archive/mirror feeds that work from cloud IPs.
+  rss:
     enabled: true
+    feeds:
+      - name: trumps_truth            # mirrors every Truth Social post
+        url: https://trumpstruth.org/feed
+        limit: 40
+      - name: white_house             # official speech/remarks transcripts
+        url: https://www.whitehouse.gov/remarks/feed/
+        full_text: true               # fetch the linked page for the full transcript
+        title_filter: ["president trump"]
+        limit: 10
+
+  # Direct Truth Social API — blocks most cloud IPs; the trumps_truth mirror
+  # above covers the same content. Enable only if running from a home IP.
+  truth_social:
+    enabled: false
     account: realDonaldTrump
     account_id: "107780257626128497"   # Trump's Truth Social numeric account id
     base_url: https://truthsocial.com

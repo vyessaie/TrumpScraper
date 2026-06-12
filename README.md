@@ -19,8 +19,10 @@ treats them uniformly:
 
 | Source | What it captures | Notes |
 |---|---|---|
-| **`truth_social`** | His Truth Social posts (highest volume) | Mastodon-style public API. May be rate-limited/blocked from datacenter IPs — falls back gracefully. |
-| **`audio`** | Speeches, rallies, press conferences, live streams | yt-dlp pulls audio from a URL, Whisper transcribes it. Optional deps. |
+| **`rss: trumps_truth`** | His Truth Social posts (highest volume) | Via [trumpstruth.org](https://trumpstruth.org), an archive that mirrors every post and works from cloud IPs. **Primary source.** |
+| **`rss: white_house`** | Official transcripts of speeches, remarks, press events | whitehouse.gov remarks feed; full transcript fetched from each linked page, filtered to "President Trump" items. |
+| **`truth_social`** | Direct Truth Social API | Disabled by default — blocks most cloud IPs, and the mirror above covers the same content. |
+| **`audio`** | Speeches, rallies, live streams (anything yt-dlp can reach) | yt-dlp pulls audio, Whisper transcribes. Optional deps. |
 | **`local`** | Any text/JSON you drop into `inbox/` | Manual path: paste posts, or transcripts you produced elsewhere. |
 
 All sources feed the same Claude analysis → sentiment → report path.

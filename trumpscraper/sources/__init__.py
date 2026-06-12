@@ -11,11 +11,27 @@ from typing import Any
 
 from .base import Source
 from .local import LocalSource
+from .rss import RssFeedSource
 from .truth_social import TruthSocialSource
 
 
 def build_sources(sources_cfg: dict[str, Any]) -> list[Source]:
     sources: list[Source] = []
+
+    rss = sources_cfg.get("rss", {})
+    if rss.get("enabled"):
+        for feed in rss.get("feeds", []):
+            if not feed.get("url"):
+                continue
+            sources.append(
+                RssFeedSource(
+                    feed_name=feed.get("name", "feed"),
+                    url=feed["url"],
+                    full_text=bool(feed.get("full_text", False)),
+                    title_filter=feed.get("title_filter"),
+                    limit=int(feed.get("limit", 40)),
+                )
+            )
 
     ts = sources_cfg.get("truth_social", {})
     if ts.get("enabled"):
@@ -47,4 +63,4 @@ def build_sources(sources_cfg: dict[str, Any]) -> list[Source]:
     return sources
 
 
-__all__ = ["Source", "TruthSocialSource", "LocalSource", "build_sources"]
+__all__ = ["Source", "TruthSocialSource", "LocalSource", "RssFeedSource", "build_sources"]

@@ -25,8 +25,30 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_tokens": 8000,
     },
     "sources": {
-        "truth_social": {
+        # Archive/mirror feeds — primary sources; reliable from datacenter IPs.
+        "rss": {
             "enabled": True,
+            "feeds": [
+                {
+                    # Independent archive mirroring every Truth Social post.
+                    "name": "trumps_truth",
+                    "url": "https://trumpstruth.org/feed",
+                    "limit": 40,
+                },
+                {
+                    # Official transcripts of speeches / remarks / press events.
+                    "name": "white_house",
+                    "url": "https://www.whitehouse.gov/remarks/feed/",
+                    "full_text": True,
+                    "title_filter": ["president trump"],
+                    "limit": 10,
+                },
+            ],
+        },
+        # Direct Truth Social API — blocks most cloud IPs; disabled by default
+        # in favor of the trumps_truth mirror (also avoids duplicate posts).
+        "truth_social": {
+            "enabled": False,
             "account": "realDonaldTrump",
             # Trump's numeric Truth Social account id (Mastodon-style API).
             "account_id": "107780257626128497",

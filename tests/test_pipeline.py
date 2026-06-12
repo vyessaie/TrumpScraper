@@ -13,6 +13,7 @@ from trumpscraper.analyze import Analysis, CompanyMention, to_mentions
 from trumpscraper.models import Mention, RawItem
 from trumpscraper.report import build_report, render_markdown, render_telegram_html
 from trumpscraper.sources.local import LocalSource
+from trumpscraper.sources.rss import RssFeedSource, extract_article_text, parse_feed
 from trumpscraper.sources.truth_social import strip_html
 from trumpscraper.storage import Store
 from trumpscraper.telegram import split_message
@@ -64,6 +65,76 @@ class SourceTests(unittest.TestCase):
         items = LocalSource(inbox_dir=tmp).fetch()
         texts = {i.text for i in items}
         self.assertEqual(texts, {"Boeing is failing", "Tesla rocks"})
+
+
+_RSS_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Feed</title>
+    <item>
+      <title>Remarks by President Trump at an Event</title>
+      <link>https://example.com/remarks-1</link>
+      <guid>https://example.com/remarks-1</guid>
+      <pubDate>Fri, 12 Jun 2026 13:00:00 +0000</pubDate>
+      <description><![CDATA[<p>Apple is doing a <b>fantastic</b> job!</p>]]></description>
+    </item>
+    <item>
+      <title>Press Briefing by the Press Secretary</title>
+      <link>https://example.com/briefing-1</link>
+      <guid>https://example.com/briefing-1</guid>
+      <pubDate>Fri, 12 Jun 2026 14:00:00 +0000</pubDate>
+      <description>Routine briefing.</description>
+    </item>
+  </channel>
+</rss>"""
+
+
+class RssTests(unittest.TestCase):
+    def test_parse_feed_rss(self):
+        entries = parse_feed(_RSS_FIXTURE)
+        self.assertEqual(len(entries), 2)
+        self.assertEqual(entries[0]["link"], "https://example.com/remarks-1")
+        self.assertIn("2026-06-12", entries[0]["published"])
+        self.assertIn("fantastic", entries[0]["description"])
+
+    def test_parse_feed_atom(self):
+        atom = (
+            '<feed xmlns="http://www.w3.org/2005/Atom">'
+            "<entry><title>T</title>"
+            '<link rel="alternate" href="https://example.com/a"/>'
+            "<id>tag:a</id><updated>2026-06-12T10:00:00Z</updated>"
+            "<summary>Boeing is failing.</summary></entry></feed>"
+        )
+        entries = parse_feed(atom)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["link"], "https://example.com/a")
+        self.assertEqual(entries[0]["description"], "Boeing is failing.")
+
+    def test_title_filter_and_items(self):
+        source = RssFeedSource(
+            "white_house", "https://example.com/feed",
+            title_filter=["president trump"],
+        )
+        entries = parse_feed(_RSS_FIXTURE)
+        # Simulate the filtering/build step without network.
+        kept = [
+            e for e in entries
+            if any(t in e["title"].lower() for t in source.title_filter)
+        ]
+        self.assertEqual(len(kept), 1)
+        self.assertIn("President Trump", kept[0]["title"])
+
+    def test_extract_article_text(self):
+        page = (
+            "<html><head><script>var x=1;</script></head><body>"
+            "<nav>menu junk</nav>"
+            "<article><h1>Remarks</h1><p>Tesla is great.</p></article>"
+            "<footer>footer junk</footer></body></html>"
+        )
+        text = extract_article_text(page)
+        self.assertIn("Tesla is great.", text)
+        self.assertNotIn("menu junk", text)
+        self.assertNotIn("var x=1", text)
 
 
 class AnalyzeTests(unittest.TestCase):

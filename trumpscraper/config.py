@@ -72,6 +72,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "publicly_traded_only": True,  # only include companies with a stock ticker
         "reports_dir": "reports",
     },
+    "signals": {
+        "enabled": True,          # buy/sell/hold screening signals per company
+        "history_days": 30,       # window for the persistence factor
+    },
     "telegram": {
         "enabled": True,
         "parse_mode": "HTML",
@@ -124,6 +128,10 @@ class Config:
     @property
     def telegram(self) -> dict[str, Any]:
         return self.data["telegram"]
+
+    @property
+    def signals(self) -> dict[str, Any]:
+        return self.data.get("signals", {})
 
     @property
     def db_path(self) -> str:

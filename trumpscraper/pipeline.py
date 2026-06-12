@@ -73,12 +73,38 @@ def build(config: Config, store: Store, total_items: int = 0) -> Report:
             len(kept), len(mentions),
         )
         mentions = kept
-    return build_report(
+    report = build_report(
         mentions,
         title=config.report.get("title", "Trump Market Mentions"),
         window_hours=window_hours,
         total_items=total_items,
     )
+    _attach_signals(config, store, report)
+    return report
+
+
+def _attach_signals(config: Config, store: Store, report: Report) -> None:
+    """Generate buy/sell/hold screening signals for the report's companies."""
+    if not (config.signals.get("enabled") and report.companies):
+        return
+    try:
+        from .signals import SignalGenerator
+
+        history_days = int(config.signals.get("history_days", 30))
+        since = (datetime.now(timezone.utc) - timedelta(days=history_days)).isoformat()
+        history_counts = store.mention_counts_since(since)
+        generator = SignalGenerator(
+            api_key=config.anthropic_api_key,
+            model=config.anthropic["model"],
+            max_tokens=int(config.anthropic.get("max_tokens", 8000)),
+        )
+        signals = generator.generate(report.companies, history_counts)
+    except Exception as exc:
+        log.warning("signals: skipped (%s: %s)", type(exc).__name__, exc)
+        return
+    for c in report.companies:
+        c.signal = signals.get(c.company)
+    log.info("signals: attached %d signal(s)", sum(1 for c in report.companies if c.signal))
 
 
 def write_report_file(config: Config, report: Report) -> str:

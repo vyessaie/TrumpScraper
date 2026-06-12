@@ -213,6 +213,69 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn("Sullivan & Cromwell", companies)
 
 
+class SignalTests(unittest.TestCase):
+    def _signal(self, kind="buy"):
+        from trumpscraper.signals import CompanySignal, FactorScores
+        return CompanySignal(
+            company="Apple", ticker="AAPL", signal=kind, conviction="medium",
+            horizon="days",
+            factors=FactorScores(
+                sentiment_strength=0.9, materiality=0.6,
+                specificity=0.8, persistence=0.3,
+            ),
+            rationale="Strong praise tied to a manufacturing commitment.",
+            risks="Statement-driven moves often fade within days.",
+        )
+
+    def test_signal_rendering(self):
+        report = build_report(
+            [Mention(company="Apple", sentiment="positive", score=0.8,
+                     confidence=0.9, quote="great job", ticker="AAPL")],
+            title="T", window_hours=24, total_items=1,
+        )
+        report.companies[0].signal = self._signal()
+        md = render_markdown(report)
+        self.assertIn("BUY-leaning", md)
+        self.assertIn("materiality 0.6", md)
+        self.assertIn("not financial advice", md)
+        html = render_telegram_html(report)
+        self.assertIn("BUY-leaning", html)
+        self.assertIn("⚠️", html)
+
+    def test_no_signal_no_disclaimer(self):
+        report = build_report(
+            [Mention(company="Apple", sentiment="positive", score=0.8,
+                     confidence=0.9, ticker="AAPL")],
+            title="T", window_hours=24, total_items=1,
+        )
+        self.assertNotIn("not financial advice", render_markdown(report))
+
+    def test_build_signal_input(self):
+        from trumpscraper.signals import build_signal_input
+        report = build_report(
+            [Mention(company="Apple", sentiment="positive", score=0.8,
+                     confidence=0.9, quote="great job", ticker="AAPL",
+                     url="https://example.com/p")],
+            title="T", window_hours=24, total_items=1,
+        )
+        text = build_signal_input(report.companies, {"Apple": 7})
+        self.assertIn("COMPANY: Apple (ticker: AAPL)", text)
+        self.assertIn("last 30 days: 7", text)
+        self.assertIn("great job", text)
+
+    def test_mention_counts_since(self):
+        tmp = tempfile.mkdtemp()
+        with Store(os.path.join(tmp, "t.db")) as store:
+            rid = store.add_item(RawItem(external_id="x", text="t", source="local"))
+            store.add_mentions(rid, [
+                Mention(company="Apple", sentiment="positive", score=0.5, confidence=0.9),
+                Mention(company="Apple", sentiment="positive", score=0.6, confidence=0.9),
+                Mention(company="Boeing", sentiment="negative", score=-0.5, confidence=0.9),
+            ])
+            counts = store.mention_counts_since("1970-01-01T00:00:00+00:00")
+            self.assertEqual(counts, {"Apple": 2, "Boeing": 1})
+
+
 class TelegramTests(unittest.TestCase):
     def test_split_short(self):
         self.assertEqual(split_message("hello"), ["hello"])

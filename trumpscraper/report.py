@@ -22,6 +22,18 @@ _SENTIMENT_EMOJI = {
 }
 
 
+_SIGNAL_DISPLAY = {
+    "buy": "📈 BUY-leaning",
+    "sell": "📉 SELL-leaning",
+    "hold": "⏸ HOLD",
+}
+
+DISCLAIMER = (
+    "Signals are screening hints derived from public statements only — "
+    "not financial advice. Do your own research before trading."
+)
+
+
 @dataclass
 class CompanySummary:
     company: str
@@ -30,6 +42,7 @@ class CompanySummary:
     avg_score: float
     label: str            # dominant sentiment
     mentions: list[Mention] = field(default_factory=list)
+    signal: object | None = None  # signals.CompanySignal when generated
 
 
 @dataclass
@@ -110,6 +123,20 @@ def render_markdown(report: Report) -> str:
             f"## {emoji} {c.company}{ticker} — {c.label} "
             f"(score {c.avg_score:+.2f}, {c.count} mention{'s' if c.count != 1 else ''})"
         )
+        if c.signal is not None:
+            s = c.signal
+            lines.append(
+                f"**Signal: {_SIGNAL_DISPLAY.get(s.signal, s.signal)}** "
+                f"({s.conviction} conviction · horizon: {s.horizon})"
+            )
+            lines.append(f"- {s.rationale}")
+            f = s.factors
+            lines.append(
+                f"- Factors: sentiment {f.sentiment_strength:.1f} · "
+                f"materiality {f.materiality:.1f} · specificity {f.specificity:.1f} · "
+                f"persistence {f.persistence:.1f}"
+            )
+            lines.append(f"- Risk: {s.risks}")
         for m in c.mentions:
             quote = f"“{m.quote}”" if m.quote else "(no quote)"
             lines.append(f"- {quote}")
@@ -118,6 +145,8 @@ def render_markdown(report: Report) -> str:
             if m.url and not m.url.startswith("file://"):
                 lines.append(f"  - [source]({m.url})")
         lines.append("")
+    if any(c.signal is not None for c in report.companies):
+        lines.append(f"---\n_{DISCLAIMER}_")
     return "\n".join(lines)
 
 
@@ -143,9 +172,19 @@ def render_telegram_html(report: Report) -> str:
             f"{emoji} <b>{esc(c.company)}</b>{ticker} — {c.label} "
             f"(score {c.avg_score:+.2f}, {c.count}×)"
         )
+        if c.signal is not None:
+            s = c.signal
+            parts.append(
+                f"   <b>{_SIGNAL_DISPLAY.get(s.signal, s.signal)}</b> "
+                f"({s.conviction} conviction · {s.horizon})"
+            )
+            parts.append(f"   {esc(s.rationale)}")
+            parts.append(f"   ⚠️ {esc(s.risks)}")
         # Show the single most confident quote to keep messages compact.
         top = c.mentions[0]
         if top.quote:
             parts.append(f"   “{esc(top.quote)}”")
         parts.append("")
+    if any(c.signal is not None for c in report.companies):
+        parts.append(f"<i>{esc(DISCLAIMER)}</i>")
     return "\n".join(parts)

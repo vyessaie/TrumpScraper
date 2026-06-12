@@ -96,6 +96,20 @@ model's minimum cacheable size).
 
 See `trumpscraper/analyze.py`.
 
+## Screening signals (buy / sell / hold)
+
+When `signals.enabled` is true (default), a second Claude pass scores each
+reported company on predefined factors — sentiment strength, **materiality**
+(rhetoric vs. concrete action like tariffs/contracts/probes), **specificity**
+(subject vs. passing mention), and **persistence** (repeated mentions over
+`signals.history_days`) — with official White House remarks weighted above
+social posts. The roll-up is a 📈 BUY-leaning / 📉 SELL-leaning / ⏸ HOLD signal
+with conviction, horizon, rationale, and a key risk. Single rhetorical mentions
+deliberately default to HOLD with low conviction.
+
+**These are screening hints derived from public statements only — not
+financial advice.** See `trumpscraper/signals.py`.
+
 ## Automated daily reports (GitHub Actions)
 
 `.github/workflows/daily-report.yml` runs the pipeline on a cron schedule

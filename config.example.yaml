@@ -45,6 +45,10 @@ report:
   publicly_traded_only: true   # only companies with a stock ticker; false = all
   reports_dir: reports
 
+signals:
+  enabled: true                # buy/sell/hold screening signals (not financial advice)
+  history_days: 30             # lookback for the "persistence" factor
+
 telegram:
   enabled: true
   parse_mode: HTML

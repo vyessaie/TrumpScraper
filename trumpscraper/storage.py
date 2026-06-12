@@ -161,6 +161,14 @@ class Store:
             )
         return out
 
+    def mention_counts_since(self, since_iso: str) -> dict[str, int]:
+        """Per-company mention counts since a timestamp (persistence factor)."""
+        rows = self.conn.execute(
+            "SELECT company, COUNT(*) AS n FROM mentions WHERE created_at >= ? GROUP BY company",
+            (since_iso,),
+        )
+        return {r["company"]: r["n"] for r in rows}
+
     # --- meta / state ---
     def set_meta(self, key: str, value: str) -> None:
         self.conn.execute(

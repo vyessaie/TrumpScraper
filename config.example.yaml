@@ -52,6 +52,8 @@ signals:
 telegram:
   enabled: true
   parse_mode: HTML
+  only_when_actionable: true   # only message on buy/sell days; skip HOLD-only/empty
+                               # (full report is still saved to reports/ either way)
 
 storage:
   db_path: data/trumpscraper.db

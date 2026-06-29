@@ -128,6 +128,21 @@ def write_report_file(config: Config, report: Report) -> str:
     return path
 
 
+def is_actionable(report: Report) -> bool:
+    """Whether a report is worth a notification.
+
+    Actionable = at least one company carries a buy/sell-leaning signal. If
+    signals couldn't be attached (disabled or generation failed) we fall back to
+    "any company present" so a signal outage never silently drops real mentions.
+    """
+    if not report.companies:
+        return False
+    signaled = [c for c in report.companies if c.signal is not None]
+    if signaled:
+        return any(getattr(c.signal, "signal", None) in ("buy", "sell") for c in signaled)
+    return True  # mentions exist but no signals attached — don't suppress
+
+
 def deliver(config: Config, report: Report) -> bool:
     """Send the report to Telegram if configured. Returns True if sent."""
     if not config.telegram.get("enabled"):
@@ -135,6 +150,13 @@ def deliver(config: Config, report: Report) -> bool:
         return False
     if not (config.telegram_bot_token and config.telegram_chat_id):
         log.warning("telegram: TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set; skipping")
+        return False
+    if config.telegram.get("only_when_actionable") and not is_actionable(report):
+        log.info(
+            "telegram: nothing actionable (%d companies, no buy/sell signal); "
+            "skipping send. Full report still saved to the archive.",
+            len(report.companies),
+        )
         return False
     telegram.send_message(
         config.telegram_bot_token,

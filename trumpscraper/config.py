@@ -79,6 +79,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "telegram": {
         "enabled": True,
         "parse_mode": "HTML",
+        # Only notify on days with a buy/sell-leaning signal; HOLD-only and
+        # empty days are skipped (the full report is still saved to the archive).
+        "only_when_actionable": True,
     },
     "storage": {
         "db_path": "data/trumpscraper.db",

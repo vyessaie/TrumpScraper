@@ -277,6 +277,52 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn("Sullivan & Cromwell", kept)
 
 
+class ActionableTests(unittest.TestCase):
+    def _report(self, signals):
+        report = build_report(
+            [Mention(company=f"Co{i}", sentiment="neutral", score=0.0,
+                     confidence=0.9, ticker=f"T{i}", is_publicly_traded=True)
+             for i in range(len(signals))],
+            title="T", window_hours=24, total_items=1,
+        )
+        from trumpscraper.signals import CompanySignal, FactorScores
+        # build_report sorts companies; assign signals by index after the fact.
+        for c, kind in zip(report.companies, signals):
+            if kind is None:
+                c.signal = None
+            else:
+                c.signal = CompanySignal(
+                    company=c.company, ticker=c.ticker, signal=kind,
+                    conviction="low", horizon="days",
+                    factors=FactorScores(sentiment_strength=0.5, materiality=0.5,
+                                         specificity=0.5, persistence=0.5),
+                    rationale="r", risks="x",
+                )
+        return report
+
+    def test_empty_not_actionable(self):
+        from trumpscraper.pipeline import is_actionable
+        report = build_report([], title="T", window_hours=24, total_items=0)
+        self.assertFalse(is_actionable(report))
+
+    def test_all_hold_not_actionable(self):
+        from trumpscraper.pipeline import is_actionable
+        self.assertFalse(is_actionable(self._report(["hold", "hold"])))
+
+    def test_buy_is_actionable(self):
+        from trumpscraper.pipeline import is_actionable
+        self.assertTrue(is_actionable(self._report(["hold", "buy"])))
+
+    def test_sell_is_actionable(self):
+        from trumpscraper.pipeline import is_actionable
+        self.assertTrue(is_actionable(self._report(["sell"])))
+
+    def test_no_signals_attached_falls_back_to_mentions(self):
+        from trumpscraper.pipeline import is_actionable
+        # Signal generation failed/disabled -> don't suppress real mentions.
+        self.assertTrue(is_actionable(self._report([None])))
+
+
 class SignalTests(unittest.TestCase):
     def _signal(self, kind="buy"):
         from trumpscraper.signals import CompanySignal, FactorScores

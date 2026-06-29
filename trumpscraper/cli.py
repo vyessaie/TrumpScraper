@@ -35,6 +35,14 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     for cmd in ("run", "fetch", "analyze", "report", "send", "init-db"):
         sub.add_parser(cmd)
+    reanalyze = sub.add_parser(
+        "reanalyze",
+        help="re-score recently fetched items (e.g. after a prompt/logic change)",
+    )
+    reanalyze.add_argument(
+        "--days", type=int, default=3,
+        help="re-analyze items fetched within this many days (default: 3)",
+    )
 
     args = parser.parse_args(argv)
     _setup_logging(args.verbose)
@@ -64,6 +72,9 @@ def main(argv: list[str] | None = None) -> int:
             report = pipeline.build(config, store)
             sent = pipeline.deliver(config, report)
             print("Sent to Telegram" if sent else "Telegram not configured / disabled")
+        elif args.command == "reanalyze":
+            n = pipeline.reanalyze_recent(config, store, days=args.days)
+            print(f"Re-analyzed {n} item(s) from the last {args.days} day(s)")
     return 0
 
 

@@ -4,7 +4,12 @@ on:
   schedule:
     # 13:00 UTC daily (~8am ET) — adjust as you like.
     - cron: "0 13 * * *"
-  workflow_dispatch: {}   # allow manual runs from the Actions tab
+  workflow_dispatch:      # allow manual runs from the Actions tab
+    inputs:
+      reanalyze_days:
+        description: "Re-score items fetched in the last N days before reporting (blank = skip)"
+        required: false
+        default: ""
 
 permissions:
   contents: write          # to commit the generated report back to the repo
@@ -43,7 +48,12 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -m trumpscraper run
+          REANALYZE_DAYS: ${{ inputs.reanalyze_days }}
+        run: |
+          if [ -n "$REANALYZE_DAYS" ]; then
+            python -m trumpscraper reanalyze --days "$REANALYZE_DAYS"
+          fi
+          python -m trumpscraper run
 
       - name: Commit report
         run: |

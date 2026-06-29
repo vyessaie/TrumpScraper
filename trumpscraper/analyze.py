@@ -38,12 +38,16 @@ statement — not the market's view, not your own. Use:
    - "mixed": both positive and negative elements
 4. score: a number from -1.0 (extremely negative) to +1.0 (extremely positive), 0.0 = neutral.
 5. confidence: 0.0-1.0 — how confident you are this is a real company mention with that sentiment.
-6. ticker: the company's stock ticker symbol ONLY if it is publicly traded on a major \
-exchange and you are confident of the exact symbol (e.g. "AAPL", "C", "MSFT"). For private \
-companies, subsidiaries without their own listing, law firms, or anything you are unsure \
-about, set this to null. Do not guess a ticker.
-7. quote: the short verbatim phrase from the statement that mentions the company.
-8. rationale: one concise sentence explaining the sentiment call.
+6. is_publicly_traded: true if the company (or its parent) has stock traded on a major \
+exchange — judge this on what you know about the company, INDEPENDENTLY of whether you \
+recall the exact ticker. Apple, Citigroup, Boeing, Meta, Amazon, Tesla, Truth Social's \
+parent (Trump Media, DJT) are all true. Private companies, law firms, privately-held \
+businesses, and government bodies are false.
+7. ticker: the stock ticker symbol if you are confident of the exact symbol (e.g. "AAPL", \
+"C", "MSFT"); otherwise null. It is fine to mark is_publicly_traded true with a null ticker \
+when you know it is public but are unsure of the precise symbol. Do not guess a ticker.
+8. quote: the short verbatim phrase from the statement that mentions the company.
+9. rationale: one concise sentence explaining the sentiment call.
 
 If no company is mentioned, return an empty mentions list. Be precise — false positives \
 (flagging something that is not actually a company) are worse than misses. Provide a one-line \
@@ -52,7 +56,11 @@ overall summary of the statement."""
 
 class CompanyMention(BaseModel):
     company: str = Field(description="Canonical company or brand name")
-    ticker: str | None = Field(default=None, description="Stock ticker if publicly traded, else null")
+    is_publicly_traded: bool = Field(
+        description="True if the company/parent trades on a major exchange, "
+        "regardless of whether you know the exact ticker"
+    )
+    ticker: str | None = Field(default=None, description="Exact stock ticker if confident, else null")
     sentiment: Literal["positive", "negative", "neutral", "mixed"]
     score: float = Field(description="-1.0 (very negative) to 1.0 (very positive)")
     confidence: float = Field(description="0.0 to 1.0")
@@ -110,6 +118,7 @@ def to_mentions(analysis: Analysis) -> list[Mention]:
             quote=m.quote.strip(),
             rationale=m.rationale.strip(),
             ticker=(m.ticker.strip().upper() if m.ticker else None),
+            is_publicly_traded=bool(m.is_publicly_traded),
         )
         for m in analysis.mentions
         if m.company.strip()

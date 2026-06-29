@@ -46,6 +46,7 @@ class Mention:
     quote: str = ""
     rationale: str = ""
     ticker: str | None = None
+    is_publicly_traded: bool = False
     # populated when read back from storage:
     content_id: int | None = None
     url: str = ""

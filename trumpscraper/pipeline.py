@@ -59,6 +59,15 @@ def analyze(config: Config, store: Store, limit: int | None = None) -> int:
     return analyzed
 
 
+def reanalyze_recent(config: Config, store: Store, days: int = 3) -> int:
+    """Re-score items fetched in the last ``days`` days, then analyze them."""
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    n = store.reset_for_reanalysis(since)
+    log.info("reanalyze: queued %d item(s) fetched since %s", n, since)
+    analyze(config, store)
+    return n
+
+
 def build(config: Config, store: Store, total_items: int = 0) -> Report:
     """Build the report from mentions within the configured lookback window."""
     window_hours = int(config.report.get("lookback_hours", 24))
@@ -66,11 +75,12 @@ def build(config: Config, store: Store, total_items: int = 0) -> Report:
     since = (datetime.now(timezone.utc) - timedelta(hours=window_hours)).isoformat()
     mentions = store.mentions_since(since, min_confidence=min_conf)
     if config.report.get("publicly_traded_only"):
-        # A ticker is Claude's signal that the company is publicly traded.
-        kept = [m for m in mentions if m.ticker]
+        kept = [m for m in mentions if m.is_publicly_traded]
+        dropped = sorted({m.company for m in mentions if not m.is_publicly_traded})
         log.info(
-            "report: publicly_traded_only -> %d of %d mentions kept",
-            len(kept), len(mentions),
+            "report: publicly_traded_only -> %d of %d mentions kept; "
+            "dropped non-public: %s",
+            len(kept), len(mentions), ", ".join(dropped) or "(none)",
         )
         mentions = kept
     report = build_report(

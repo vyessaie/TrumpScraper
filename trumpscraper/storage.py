@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS mentions (
     confidence  REAL NOT NULL,
     quote       TEXT DEFAULT '',
     rationale   TEXT DEFAULT '',
-    created_at  TEXT NOT NULL
+    created_at  TEXT NOT NULL,
+    is_publicly_traded INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_mentions_created_at ON mentions(created_at);
@@ -59,7 +60,21 @@ class Store:
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """Add columns introduced after a DB was first created."""
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(mentions)")}
+        if "is_publicly_traded" not in cols:
+            self.conn.execute(
+                "ALTER TABLE mentions ADD COLUMN is_publicly_traded INTEGER NOT NULL DEFAULT 0"
+            )
+            # Existing rows: treat a known ticker as the public-company signal.
+            self.conn.execute(
+                "UPDATE mentions SET is_publicly_traded = 1 "
+                "WHERE ticker IS NOT NULL AND ticker != ''"
+            )
 
     def close(self) -> None:
         self.conn.close()
@@ -104,6 +119,29 @@ class Store:
             sql += f" LIMIT {int(limit)}"
         return [_row_to_item(r) for r in self.conn.execute(sql)]
 
+    def reset_for_reanalysis(self, since_iso: str) -> int:
+        """Clear mentions + analyzed flag for items fetched since ``since_iso``.
+
+        Used after a prompt/logic change to re-score recent content. Returns the
+        number of items queued for re-analysis.
+        """
+        ids = [
+            r["id"]
+            for r in self.conn.execute(
+                "SELECT id FROM content_items WHERE fetched_at >= ?", (since_iso,)
+            )
+        ]
+        if ids:
+            placeholders = ",".join("?" * len(ids))
+            self.conn.execute(
+                f"DELETE FROM mentions WHERE content_id IN ({placeholders})", ids
+            )
+            self.conn.execute(
+                f"UPDATE content_items SET analyzed = 0 WHERE id IN ({placeholders})", ids
+            )
+            self.conn.commit()
+        return len(ids)
+
     def mark_analyzed(self, content_id: int) -> None:
         self.conn.execute(
             "UPDATE content_items SET analyzed = 1 WHERE id = ?", (content_id,)
@@ -123,13 +161,15 @@ class Store:
                 m.quote,
                 m.rationale,
                 utcnow_iso(),
+                1 if m.is_publicly_traded else 0,
             )
             for m in mentions
         ]
         self.conn.executemany(
             """INSERT INTO mentions
-               (content_id, company, ticker, sentiment, score, confidence, quote, rationale, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               (content_id, company, ticker, sentiment, score, confidence, quote, rationale,
+                created_at, is_publicly_traded)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             rows,
         )
         self.conn.commit()
@@ -154,6 +194,7 @@ class Store:
                     quote=r["quote"],
                     rationale=r["rationale"],
                     ticker=r["ticker"],
+                    is_publicly_traded=bool(r["is_publicly_traded"]),
                     content_id=r["content_id"],
                     url=r["c_url"] or "",
                     published_at=r["c_published"],

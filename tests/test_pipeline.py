@@ -34,11 +34,54 @@ class StorageTests(unittest.TestCase):
         self.assertIsNone(self.store.add_item(item))
         self.assertEqual(len(self.store.get_unanalyzed()), 1)
 
+    def test_reset_for_reanalysis(self):
+        rid = self.store.add_item(RawItem(external_id="x1", text="t", source="local"))
+        self.store.add_mentions(rid, [
+            Mention(company="Apple", sentiment="positive", score=0.8,
+                    confidence=0.9, ticker="AAPL", is_publicly_traded=True),
+        ])
+        self.store.mark_analyzed(rid)
+        self.assertEqual(len(self.store.get_unanalyzed()), 0)
+        # Reset everything fetched since the epoch.
+        n = self.store.reset_for_reanalysis("1970-01-01T00:00:00+00:00")
+        self.assertEqual(n, 1)
+        self.assertEqual(len(self.store.get_unanalyzed()), 1)  # back in the queue
+        self.assertEqual(
+            len(self.store.mentions_since("1970-01-01T00:00:00+00:00")), 0  # old mentions cleared
+        )
+
+    def test_migration_adds_is_publicly_traded(self):
+        import sqlite3
+        # Simulate an old DB whose mentions table predates the new column.
+        path = os.path.join(self.tmp, "old.db")
+        conn = sqlite3.connect(path)
+        conn.executescript(
+            """CREATE TABLE content_items (id INTEGER PRIMARY KEY, source TEXT,
+                 external_id TEXT, url TEXT, author TEXT, published_at TEXT,
+                 text TEXT, fetched_at TEXT, analyzed INTEGER);
+               CREATE TABLE mentions (id INTEGER PRIMARY KEY, content_id INTEGER,
+                 company TEXT, ticker TEXT, sentiment TEXT, score REAL,
+                 confidence REAL, quote TEXT, rationale TEXT, created_at TEXT);
+               INSERT INTO content_items VALUES (1,'local','x','','','','t','t',1);
+               INSERT INTO mentions VALUES
+                 (1,1,'Apple','AAPL','positive',0.8,0.9,'','','2026-01-01T00:00:00+00:00'),
+                 (2,1,'Bob''s Diner',NULL,'positive',0.5,0.9,'','','2026-01-01T00:00:00+00:00');"""
+        )
+        conn.commit()
+        conn.close()
+        # Opening via Store should migrate: rows with a ticker become public.
+        with Store(path) as store:
+            rows = store.mentions_since("1970-01-01T00:00:00+00:00")
+            by_co = {m.company: m for m in rows}
+            self.assertTrue(by_co["Apple"].is_publicly_traded)
+            self.assertFalse(by_co["Bob's Diner"].is_publicly_traded)
+
     def test_analyze_flow_and_lookback(self):
         rid = self.store.add_item(RawItem(external_id="x1", text="Apple is great", source="local"))
         self.store.add_mentions(
             rid,
-            [Mention(company="Apple", sentiment="positive", score=0.8, confidence=0.9, ticker="AAPL")],
+            [Mention(company="Apple", sentiment="positive", score=0.8, confidence=0.9,
+                     ticker="AAPL", is_publicly_traded=True)],
         )
         self.store.mark_analyzed(rid)
         self.assertEqual(len(self.store.get_unanalyzed()), 0)
@@ -46,6 +89,7 @@ class StorageTests(unittest.TestCase):
         recent = self.store.mentions_since("1970-01-01T00:00:00+00:00", min_confidence=0.5)
         self.assertEqual(len(recent), 1)
         self.assertEqual(recent[0].company, "Apple")
+        self.assertTrue(recent[0].is_publicly_traded)
         self.assertEqual(
             len(self.store.mentions_since("2999-01-01T00:00:00+00:00")), 0
         )
@@ -153,12 +197,13 @@ class AnalyzeTests(unittest.TestCase):
             summary="x",
             mentions=[
                 CompanyMention(
-                    company=" Apple ", ticker="aapl", sentiment="positive",
-                    score=0.8, confidence=0.9, quote="great job", rationale="praise",
+                    company=" Apple ", ticker="aapl", is_publicly_traded=True,
+                    sentiment="positive", score=0.8, confidence=0.9,
+                    quote="great job", rationale="praise",
                 ),
                 CompanyMention(
-                    company="", ticker=None, sentiment="neutral",
-                    score=0.0, confidence=0.5,
+                    company="", ticker=None, is_publicly_traded=False,
+                    sentiment="neutral", score=0.0, confidence=0.5,
                 ),
             ],
         )
@@ -166,6 +211,22 @@ class AnalyzeTests(unittest.TestCase):
         self.assertEqual(len(mentions), 1)
         self.assertEqual(mentions[0].company, "Apple")
         self.assertEqual(mentions[0].ticker, "AAPL")
+        self.assertTrue(mentions[0].is_publicly_traded)
+
+    def test_to_mentions_public_without_ticker(self):
+        analysis = Analysis(
+            summary="x",
+            mentions=[
+                CompanyMention(
+                    company="Foreign Bank", ticker=None, is_publicly_traded=True,
+                    sentiment="positive", score=0.5, confidence=0.8,
+                ),
+            ],
+        )
+        mentions = to_mentions(analysis)
+        self.assertEqual(len(mentions), 1)
+        self.assertIsNone(mentions[0].ticker)
+        self.assertTrue(mentions[0].is_publicly_traded)
 
 
 class ReportTests(unittest.TestCase):
@@ -201,16 +262,19 @@ class ReportTests(unittest.TestCase):
         self.assertIn("No company mentions", render_markdown(report))
 
     def test_publicly_traded_filter(self):
-        # Mirrors pipeline.build()'s filter: keep only mentions with a ticker.
-        mentions = self._mentions() + [
+        # Mirrors pipeline.build()'s filter: keep only publicly-traded mentions.
+        # A public company with no known ticker must still be kept.
+        mentions = [
+            Mention(company="Apple", sentiment="positive", score=0.8,
+                    confidence=0.9, ticker="AAPL", is_publicly_traded=True),
+            Mention(company="Some Foreign Bank", sentiment="positive", score=0.6,
+                    confidence=0.9, ticker=None, is_publicly_traded=True),
             Mention(company="Sullivan & Cromwell", sentiment="positive",
-                    score=0.7, confidence=0.9, ticker=None),
+                    score=0.7, confidence=0.9, ticker=None, is_publicly_traded=False),
         ]
-        kept = [m for m in mentions if m.ticker]
-        companies = {m.company for m in kept}
-        self.assertIn("Apple", companies)
-        self.assertIn("Amazon", companies)
-        self.assertNotIn("Sullivan & Cromwell", companies)
+        kept = {m.company for m in mentions if m.is_publicly_traded}
+        self.assertEqual(kept, {"Apple", "Some Foreign Bank"})
+        self.assertNotIn("Sullivan & Cromwell", kept)
 
 
 class SignalTests(unittest.TestCase):
